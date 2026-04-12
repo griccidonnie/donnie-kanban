@@ -1,0 +1,31 @@
+{
+  "name": "donnie-kanban",
+  "version": "1.0.0",
+  "description": "Tablero Kanban moderno y minimalista para OpenClaw",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "install-service": "./install.sh",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["kanban", "openclaw", "productivity", "project-management", "realtime"],
+  "author": "Donnie Ricci <gricci.donnie@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/griccidonnie/donnie-kanban.git"
+  },
+  "homepage": "https://github.com/griccidonnie/donnie-kanban#readme",
+  "bugs": {
+    "url": "https://github.com/griccidonnie/donnie-kanban/issues"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "express": "^5.2.1",
+    "ws": "^8.19.0"
+  }
+}
