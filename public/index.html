@@ -579,6 +579,14 @@
         <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
         Portfolio
       </div>
+      <div class="sb-nav-item" data-view="pipeline" onclick="navTo('pipeline',this)">
+        <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><line x1="7" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="17" y2="12"/></svg>
+        Pipeline
+      </div>
+      <div class="sb-nav-item" data-view="inbox" onclick="navTo('inbox',this)">
+        <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+        Inbox <span id="inbox-badge" style="background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;display:none;"></span>
+      </div>
     </div>
 
     <div class="sidebar-divider"></div>
@@ -712,6 +720,14 @@
           </select>
         </div>
         <div class="portfolio-grid" id="portfolio-grid"></div>
+      </div>
+
+      <div class="portfolio-container" id="pipeline-view" style="display:none;">
+        <div id="pipeline-content"></div>
+      </div>
+
+      <div class="portfolio-container" id="inbox-view" style="display:none;">
+        <div id="inbox-content"></div>
       </div>
     </div>
   </div>
@@ -969,7 +985,7 @@ function wsProjects(){if(currentWorkspace==='all')return data.projects;return da
 function filtered(){let t=data.tasks;if(currentWorkspace!=='all'){const pids=wsProjects().map(p=>p.id);t=t.filter(x=>pids.includes(x.project));}if(filters.project!=='all')t=t.filter(x=>x.project===filters.project);else if(filters.area!=='all'){const ap=(data.projects||[]).filter(p=>p.area_id===filters.area).map(p=>p.id);t=t.filter(x=>ap.includes(x.project));}if(filters.status==='active')t=t.filter(x=>x.column!=='done');else if(filters.status==='done')t=t.filter(x=>x.column==='done');return t;}
 
 // View name mapping
-const viewNames = { kanban: 'Kanban', list: 'Lista', eisenhower: 'Eisenhower', portfolio: 'Portfolio', project: 'Proyecto' };
+const viewNames = { kanban: 'Kanban', list: 'Lista', eisenhower: 'Eisenhower', portfolio: 'Portfolio', project: 'Proyecto', pipeline: 'Pipeline', inbox: 'Inbox' };
 
 // Navigation
 function navTo(view, el, pushHistory=true){
@@ -1093,8 +1109,10 @@ function render(){
   document.getElementById('eisenhower-view').className='matrix-container'+(currentView==='eisenhower'?' active':'');
   document.getElementById('project-detail').className='project-detail'+(currentView==='project'?' active':'');
   document.getElementById('portfolio-view').className='portfolio-container'+(currentView==='portfolio'?' active':'');
+  document.getElementById('pipeline-view').style.display=currentView==='pipeline'?'block':'none';
+  document.getElementById('inbox-view').style.display=currentView==='inbox'?'block':'none';
   // List view manages its own top toolbar, so hide the kanban filter-bar.
-  document.getElementById('filter-bar').style.display=(currentView==='portfolio'||currentView==='project'||currentView==='list')?'none':'flex';
+  document.getElementById('filter-bar').style.display=(currentView==='portfolio'||currentView==='project'||currentView==='list'||currentView==='inbox'||currentView==='pipeline')?'none':'flex';
 
   // Update header
   const mainTitle = document.getElementById('view-title-main');
@@ -1113,7 +1131,10 @@ function render(){
   else if(currentView==='list'){renderList();subTitle.textContent = getFilterSubtitle();}
   else if(currentView==='project'){renderProjectDetail();const p=getProj(currentProject);subTitle.textContent=p.name;}
   else if(currentView==='portfolio'){renderPortfolio();subTitle.textContent='';}
+  else if(currentView==='pipeline'){renderPipeline();subTitle.textContent='';}
+  else if(currentView==='inbox'){renderInbox();subTitle.textContent='';}
   updateStats();
+  updateInboxBadge();
 
   // Keep URL hash in sync with currentView so a hard refresh keeps the view.
   const expectedHash = '#' + currentView;
@@ -1588,6 +1609,14 @@ function openProjectPanel(projId){
     <div class="form-group"><label>Color</label><input type="color" id="proj-edit-color" value="${escAttr(p.color)}" style="width:48px;height:32px;border:1px solid var(--border);cursor:pointer;background:none;border-radius:var(--radius-sm);"></div>
     <div class="form-group"><label>Workspace</label><select id="proj-edit-ws" onchange="onProjWsChange()"><option value="">Sin asignar</option>${wsOptions}</select></div>
     <div class="form-group"><label>Area</label><select id="proj-edit-area"><option value="">Sin area</option>${areaOptions}</select></div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="form-group" style="grid-column:1/-1;margin-bottom:0;"><label>Stack</label><select id="proj-edit-stack"><option value="">Sin definir</option>${['node','python','go','static','docker'].map(s=>'<option value="'+s+'"'+(p.stack===s?' selected':'')+'>'+({node:'Node.js',python:'Python',go:'Go',static:'Static',docker:'Docker'}[s])+'</option>').join('')}</select></div>
+      <div class="form-group" style="grid-column:1/-1;margin-bottom:0;"><label>Repo URL</label><input type="url" id="proj-edit-repo-url" value="${escAttr(p.repo_url||'')}" placeholder="https://github.com/..."></div>
+      <div class="form-group" style="margin-bottom:0;"><label>Puerto local</label><input type="number" id="proj-edit-local-port" value="${p.local_port||''}" min="0" max="65535" placeholder="3000"></div>
+      <div class="form-group" style="margin-bottom:0;"><label>Compose file</label><input type="text" id="proj-edit-compose-file" value="${escAttr(p.compose_file||'')}" placeholder="docker-compose.yml"></div>
+      <div class="form-group" style="margin-bottom:0;"><label>Staging URL</label><input type="url" id="proj-edit-staging-url" value="${escAttr(p.staging_url||'')}" placeholder="https://staging..."></div>
+      <div class="form-group" style="margin-bottom:0;"><label>Prod URL</label><input type="url" id="proj-edit-prod-url" value="${escAttr(p.prod_url||'')}" placeholder="https://..."></div>
+    </div>
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
       <button class="btn btn-sm" onclick="openProjectConfig('${escAttr(projId)}',null);closeSlidePanel()">Ver detalle completo</button>
       <button class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="deleteProjFromPanel('${escAttr(projId)}')">Eliminar</button>
@@ -1606,8 +1635,14 @@ async function saveProjPanel(projId){
   const color=document.getElementById('proj-edit-color').value;
   const ws=document.getElementById('proj-edit-ws').value;
   const area=document.getElementById('proj-edit-area').value;
+  const repo_url=document.getElementById('proj-edit-repo-url').value.trim();
+  const stack=document.getElementById('proj-edit-stack').value;
+  const local_port=parseInt(document.getElementById('proj-edit-local-port').value)||0;
+  const compose_file=document.getElementById('proj-edit-compose-file').value.trim();
+  const staging_url=document.getElementById('proj-edit-staging-url').value.trim();
+  const prod_url=document.getElementById('proj-edit-prod-url').value.trim();
   if(!name) return;
-  await api.put('/api/projects/'+projId,{name,color,workspace_id:ws,area_id:area});
+  await api.put('/api/projects/'+projId,{name,color,workspace_id:ws,area_id:area,repo_url,stack,local_port,compose_file,staging_url,prod_url});
   closeSlidePanel();
   await loadData();
 }
@@ -1830,6 +1865,67 @@ function renderProjectDetail(){
       </select>
     </div>
 
+    <div class="pd-section" style="margin-top:14px;">
+      <div class="pd-section-header">Registro del proyecto</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:var(--fs-sm);">
+        <div><span style="color:var(--text-muted);">Stack:</span> <strong>${esc(p.stack||'Sin definir')}</strong></div>
+        <div><span style="color:var(--text-muted);">Puerto local:</span> <strong>${p.local_port||'—'}</strong></div>
+        ${p.repo_url?`<div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Repo:</span> <a href="${escAttr(p.repo_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">${esc(p.repo_url)}</a></div>`:''}
+        ${p.staging_url?`<div><span style="color:var(--text-muted);">Staging:</span> <a href="${escAttr(p.staging_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">${esc(p.staging_url)}</a></div>`:''}
+        ${p.prod_url?`<div><span style="color:var(--text-muted);">Prod:</span> <a href="${escAttr(p.prod_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">${esc(p.prod_url)}</a></div>`:''}
+      </div>
+    </div>
+
+    <div class="pd-section" style="margin-top:14px;">
+      <div class="pd-section-header">Agent Runner</div>
+      <div id="pd-agent">
+        ${p.repo_url?`
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <input type="text" id="agent-instruction" placeholder="Instruccion para el agente..." style="flex:1;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-md);padding:6px 10px;font-size:var(--fs-sm);font-family:var(--font);">
+            <button class="btn btn-sm" onclick="runAgent('${escAttr(currentProject)}')">Ejecutar</button>
+          </div>
+          <div id="agent-status" style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:8px;"></div>
+          ${(()=>{
+            const jobs=(data.agent_jobs||[]).filter(j=>j.project_id===currentProject);
+            if(!jobs.length) return '<div style="font-size:var(--fs-sm);color:var(--text-muted);">Sin jobs anteriores</div>';
+            return '<div style="font-size:var(--fs-sm);">'+jobs.slice(0,5).map(j=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:4px 0;border-bottom:1px solid var(--border);">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${j.status==='done'?'var(--success)':j.status==='running'?'var(--warning)':'var(--danger)'};flex-shrink:0;"></span>
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(j.instruction)}</span>
+              ${j.pr_url?`<a href="${escAttr(j.pr_url)}" target="_blank" style="color:var(--accent);flex-shrink:0;">PR</a>`:''}
+              <span style="color:var(--text-muted);flex-shrink:0;">${j.status}</span>
+            </div>`).join('')+'</div>';
+          })()}
+        `:`<div style="font-size:var(--fs-sm);color:var(--text-muted);">Vincula un repo de GitHub primero</div>`}
+      </div>
+    </div>
+
+    <div class="pd-section" style="margin-top:14px;">
+      <div class="pd-section-header">Docker
+        <span style="font-weight:normal;font-size:var(--fs-sm);display:inline-flex;gap:4px;">
+          ${p.compose_file||p.stack?`
+            <button onclick="dockerUp('${escAttr(currentProject)}')">▶ Levantar</button>
+            <button onclick="dockerDown('${escAttr(currentProject)}')">■ Detener</button>
+            <button onclick="dockerStatus('${escAttr(currentProject)}')">Estado</button>
+          `:`
+            ${p.stack?`<button onclick="dockerScaffold('${escAttr(currentProject)}')">Generar docker-compose</button>`
+            :'<span style="color:var(--text-muted);">Asigna un stack primero</span>'}
+          `}
+        </span>
+      </div>
+      <div id="pd-docker" style="font-size:var(--fs-sm);color:var(--text-muted);">Sin estado</div>
+    </div>
+
+    <div class="pd-section" style="margin-top:14px;">
+      <div class="pd-section-header">GitHub ${p.repo_url?`<button onclick="loadGitHubInfo('${escAttr(currentProject)}')" style="font-weight:normal;font-size:var(--fs-sm);">Actualizar</button>`:''}</div>
+      <div id="pd-github">
+        ${p.repo_url?`<div style="font-size:var(--fs-sm);color:var(--text-muted);">Click "Actualizar" para ver PRs y commits recientes</div>`
+        :`<div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="createGitHubRepo('${escAttr(currentProject)}','${escAttr(p.name)}')">Crear repo</button>
+            <button class="btn btn-sm btn-ghost" onclick="linkGitHubRepo('${escAttr(currentProject)}')">Vincular existente</button>
+          </div>`}
+      </div>
+    </div>
+
     <div class="pd-section" style="margin-top:20px;">
       <div class="pd-section-header">Contexto y notas</div>
       <div class="pd-notes-wrap">
@@ -1906,6 +2002,231 @@ function saveProjectNotes(){
 }
 function pdCmd(cmd,val){document.execCommand(cmd,false,val||null);document.getElementById('pd-notes').focus();}
 function pdInsertLink(){const u=prompt('URL:');if(u)pdCmd('createLink',u);}
+
+// Pipeline SDLC
+function renderPipeline(){
+  const runs=(data.pipeline_runs||[]);
+  const el=document.getElementById('pipeline-content');
+  if(!runs.length){el.innerHTML='<div style="padding:24px;color:var(--text-muted);">No hay pipeline runs activos. Aprueba una solicitud del Inbox o inicia un run desde el detalle del proyecto.</div>';return;}
+  const stages=['Analisis','Implementacion','Tests','Review','Staging','Aprobacion','Produccion'];
+  let html='<div style="overflow-x:auto;padding:8px 0;">';
+  // Stage headers
+  html+='<div style="display:grid;grid-template-columns:140px repeat('+stages.length+',1fr);gap:4px;margin-bottom:12px;font-size:var(--fs-sm);color:var(--text-muted);font-weight:600;">';
+  html+='<div>Proyecto</div>';
+  stages.forEach(s=>{html+='<div style="text-align:center;">'+esc(s)+'</div>';});
+  html+='</div>';
+  // Runs
+  runs.forEach(run=>{
+    const proj=data.projects.find(p=>p.id===run.project_id);
+    const projName=proj?proj.name:'?';
+    const projColor=proj?proj.color:'#8b949e';
+    html+='<div style="display:grid;grid-template-columns:140px repeat('+stages.length+',1fr);gap:4px;margin-bottom:6px;align-items:center;">';
+    html+=`<div style="font-size:var(--fs-sm);display:flex;align-items:center;gap:6px;overflow:hidden;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escAttr(projColor)};flex-shrink:0;"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(projName)}</span></div>`;
+    stages.forEach(stage=>{
+      const entry=(run.history||[]).find(h=>h.stage===stage);
+      let bg='var(--bg-input)',color='var(--text-muted)',label='—';
+      if(entry){
+        if(entry.status==='done'){bg='var(--success)';color='#fff';label='✓';}
+        else if(entry.status==='active'){bg='var(--warning)';color='#000';label='●';}
+        else if(entry.status==='failed'){bg='var(--danger)';color='#fff';label='✗';}
+      }
+      const isCurrent=run.current_stage===stage&&run.status==='running';
+      html+=`<div style="text-align:center;background:${bg};color:${color};border-radius:var(--radius-sm);padding:4px 2px;font-size:11px;font-weight:600;${isCurrent?'box-shadow:0 0 0 2px var(--accent);':''}">${label}</div>`;
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+  // Actions for running pipelines
+  const running=runs.filter(r=>r.status==='running');
+  if(running.length){
+    html+='<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">';
+    html+='<div style="font-size:var(--fs-sm);font-weight:600;margin-bottom:8px;">Runs activos</div>';
+    running.forEach(r=>{
+      const proj=data.projects.find(p=>p.id===r.project_id);
+      html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:var(--fs-sm);">
+        <span>${esc(proj?proj.name:'?')}</span>
+        <span style="color:var(--text-muted);">en</span>
+        <strong>${esc(r.current_stage)}</strong>
+        <button class="btn btn-sm" onclick="advancePipeline('${escAttr(r.id)}')">Avanzar</button>
+        <button class="btn btn-sm btn-ghost" onclick="failPipeline('${escAttr(r.id)}')">Fallar</button>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  el.innerHTML=html;
+}
+async function advancePipeline(runId){
+  await api.put('/api/pipeline/runs/'+runId+'/advance',{});
+  await loadData();
+}
+async function failPipeline(runId){
+  const err=prompt('Razon del fallo:');
+  await api.put('/api/pipeline/runs/'+runId+'/fail',{error:err||'Failed'});
+  await loadData();
+}
+async function startPipelineRun(projectId,requestId){
+  await api.post('/api/pipeline/runs',{project_id:projectId,request_id:requestId||''});
+  await loadData();
+}
+
+// Inbox / Requests
+function renderInbox(){
+  const reqs=(data.requests||[]);
+  const pending=reqs.filter(r=>r.status==='pending');
+  // Update badge
+  const badge=document.getElementById('inbox-badge');
+  if(badge){badge.textContent=pending.length;badge.style.display=pending.length?'inline-block':'none';}
+  const el=document.getElementById('inbox-content');
+  if(!reqs.length){el.innerHTML='<div style="padding:24px;color:var(--text-muted);">No hay solicitudes</div>';return;}
+  const byProject={};
+  reqs.forEach(r=>{const pid=r.project_id||'_unassigned';if(!byProject[pid])byProject[pid]=[];byProject[pid].push(r);});
+  let html='';
+  for(const [pid, items] of Object.entries(byProject)){
+    const proj=data.projects.find(p=>p.id===pid);
+    const projName=proj?proj.name:'Sin proyecto';
+    const projColor=proj?proj.color:'#8b949e';
+    html+=`<div style="margin-bottom:24px;"><h3 style="font-size:var(--fs-lg);margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escAttr(projColor)};"></span>${esc(projName)}</h3>`;
+    items.forEach(r=>{
+      const statusColor=r.status==='pending'?'var(--warning)':r.status==='approved'?'var(--success)':r.status==='rejected'?'var(--danger)':'var(--text-muted)';
+      html+=`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:start;">
+          <div style="flex:1;">
+            <div style="font-size:var(--fs-base);margin-bottom:4px;">${esc(r.description)}</div>
+            <div style="font-size:var(--fs-sm);color:var(--text-muted);">De: ${esc(r.submitted_by||'anonymous')} · ${esc(r.created_at)}</div>
+            ${r.notes?`<div style="font-size:var(--fs-sm);color:var(--text-muted);margin-top:4px;">Nota: ${esc(r.notes)}</div>`:''}
+            ${r.agent_job_id?`<div style="font-size:var(--fs-sm);color:var(--accent);margin-top:4px;">Job: ${esc(r.agent_job_id)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+            <span style="font-size:var(--fs-sm);color:${statusColor};margin-right:8px;">${esc(r.status)}</span>
+            ${r.status==='pending'?`
+              <button class="btn btn-sm" onclick="approveRequest('${escAttr(r.id)}','${escAttr(r.project_id)}','${escAttr(r.description.replace(/'/g,"\\'"))}')">Aprobar</button>
+              <button class="btn btn-sm btn-ghost" onclick="rejectRequest('${escAttr(r.id)}')">Rechazar</button>
+            `:''}
+          </div>
+        </div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  el.innerHTML=html;
+}
+async function approveRequest(reqId,projectId,description){
+  await api.put('/api/requests/'+reqId,{status:'approved'});
+  // Auto-trigger agent if project has a repo
+  const proj=data.projects.find(p=>p.id===projectId);
+  if(proj&&proj.repo_url){
+    try{
+      const r=await api.post('/api/agent/run',{project_id:projectId,instruction:description});
+      if(r.job_id) await api.put('/api/requests/'+reqId,{agent_job_id:r.job_id});
+    }catch(e){}
+  }
+  await loadData();
+}
+async function rejectRequest(reqId){
+  const notes=prompt('Razon del rechazo (opcional):');
+  await api.put('/api/requests/'+reqId,{status:'rejected',notes:notes||''});
+  await loadData();
+}
+
+// Update inbox badge on every render
+function updateInboxBadge(){
+  const pending=(data.requests||[]).filter(r=>r.status==='pending').length;
+  const badge=document.getElementById('inbox-badge');
+  if(badge){badge.textContent=pending;badge.style.display=pending?'inline-block':'none';}
+}
+
+// Agent Runner
+async function runAgent(projectId){
+  const input=document.getElementById('agent-instruction');
+  const instruction=input.value.trim();
+  if(!instruction) return;
+  const statusEl=document.getElementById('agent-status');
+  statusEl.innerHTML='<span style="color:var(--warning);">Iniciando agente...</span>';
+  input.disabled=true;
+  try{
+    const r=await api.post('/api/agent/run',{project_id:projectId,instruction});
+    if(r.error){statusEl.innerHTML=`<span style="color:var(--danger);">${esc(r.error)}</span>`;input.disabled=false;return;}
+    statusEl.innerHTML=`<span style="color:var(--warning);">Agente trabajando (job: ${esc(r.job_id)})... El resultado aparecera automaticamente.</span>`;
+    input.value='';
+    input.disabled=false;
+  }catch(e){statusEl.innerHTML=`<span style="color:var(--danger);">${esc(e.message)}</span>`;input.disabled=false;}
+}
+
+// Docker Compose integration
+async function dockerScaffold(projectId){
+  const el=document.getElementById('pd-docker');
+  el.innerHTML='Generando docker-compose.yml...';
+  try{
+    const r=await api.post('/api/docker/scaffold',{project_id:projectId});
+    if(r.error){el.innerHTML=`<span style="color:var(--danger);">${esc(r.error)}</span>`;return;}
+    await loadData();
+  }catch(e){el.innerHTML=`<span style="color:var(--danger);">${esc(e.message)}</span>`;}
+}
+async function dockerUp(projectId){
+  const el=document.getElementById('pd-docker');
+  el.innerHTML='Levantando containers...';
+  try{
+    const r=await api.post('/api/docker/up',{project_id:projectId});
+    if(r.error){el.innerHTML=`<span style="color:var(--danger);">${esc(r.error)}</span>`;return;}
+    el.innerHTML='<span style="color:var(--success);">Containers levantados</span>';
+    setTimeout(()=>dockerStatus(projectId),1500);
+  }catch(e){el.innerHTML=`<span style="color:var(--danger);">${esc(e.message)}</span>`;}
+}
+async function dockerDown(projectId){
+  const el=document.getElementById('pd-docker');
+  el.innerHTML='Deteniendo containers...';
+  try{
+    const r=await api.post('/api/docker/down',{project_id:projectId});
+    if(r.error){el.innerHTML=`<span style="color:var(--danger);">${esc(r.error)}</span>`;return;}
+    el.innerHTML='<span style="color:var(--text-muted);">Containers detenidos</span>';
+  }catch(e){el.innerHTML=`<span style="color:var(--danger);">${esc(e.message)}</span>`;}
+}
+async function dockerStatus(projectId){
+  const el=document.getElementById('pd-docker');
+  try{
+    const r=await(await fetch('/api/docker/status/'+projectId)).json();
+    if(!r.containers||!r.containers.length){el.innerHTML='<span style="color:var(--text-muted);">Sin containers activos</span>';return;}
+    el.innerHTML=r.containers.map(c=>`<div style="margin-bottom:2px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.State==='running'?'var(--success)':'var(--text-muted)'};margin-right:6px;"></span><strong>${esc(c.Service||c.Name)}</strong> — ${esc(c.State)} ${c.Ports?'<span style="color:var(--text-muted);">('+esc(c.Ports)+')</span>':''}</div>`).join('');
+  }catch(e){el.innerHTML=`<span style="color:var(--danger);">${esc(e.message)}</span>`;}
+}
+
+// GitHub integration
+async function createGitHubRepo(projectId, projectName){
+  const repoName = prompt('Nombre del repo en GitHub:', projectName.toLowerCase().replace(/[^a-z0-9-]/g,'-'));
+  if(!repoName) return;
+  const el=document.getElementById('pd-github');
+  el.innerHTML='<div style="color:var(--text-muted);font-size:var(--fs-sm);">Creando repo...</div>';
+  try{
+    const r=await api.post('/api/github/create-repo',{project_id:projectId,name:repoName});
+    if(r.error){el.innerHTML=`<div style="color:var(--danger);font-size:var(--fs-sm);">Error: ${esc(r.error)}</div>`;return;}
+    await loadData();
+  }catch(e){el.innerHTML=`<div style="color:var(--danger);font-size:var(--fs-sm);">Error: ${esc(e.message)}</div>`;}
+}
+async function linkGitHubRepo(projectId){
+  const url=prompt('URL del repo de GitHub:','https://github.com/griccidonnie/');
+  if(!url) return;
+  await api.post('/api/github/link-repo',{project_id:projectId,repo_url:url});
+  await loadData();
+}
+async function loadGitHubInfo(projectId){
+  const el=document.getElementById('pd-github');
+  el.innerHTML='<div style="color:var(--text-muted);font-size:var(--fs-sm);">Cargando...</div>';
+  try{
+    const r=await(await fetch('/api/github/repo-info/'+projectId)).json();
+    if(!r.linked){el.innerHTML='<div style="color:var(--text-muted);font-size:var(--fs-sm);">Repo no vinculado</div>';return;}
+    let html='<div style="font-size:var(--fs-sm);">';
+    if(r.open_prs&&r.open_prs.length){
+      html+=`<div style="margin-bottom:8px;"><strong>PRs abiertas (${r.open_prs.length})</strong></div>`;
+      r.open_prs.forEach(pr=>{html+=`<div style="margin-left:8px;margin-bottom:4px;"><a href="${escAttr(pr.url)}" target="_blank" style="color:var(--accent);">#${pr.number}</a> ${esc(pr.title)} <span style="color:var(--text-muted);">(${pr.user})</span></div>`;});
+    } else { html+='<div style="margin-bottom:8px;color:var(--text-muted);">Sin PRs abiertas</div>'; }
+    if(r.recent_commits&&r.recent_commits.length){
+      html+='<div style="margin-bottom:4px;margin-top:8px;"><strong>Commits recientes</strong></div>';
+      r.recent_commits.slice(0,5).forEach(c=>{html+=`<div style="margin-left:8px;margin-bottom:3px;"><code style="color:var(--accent);">${esc(c.sha)}</code> ${esc(c.message)} <span style="color:var(--text-muted);">— ${esc(c.author)}</span></div>`;});
+    }
+    html+='</div>';
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<div style="color:var(--danger);font-size:var(--fs-sm);">Error: ${esc(e.message)}</div>`;}
+}
 
 // References
 function openRefModal(){document.getElementById('ref-modal').classList.add('active');document.getElementById('ref-title').value='';document.getElementById('ref-url').value='';document.getElementById('ref-notes').value='';document.getElementById('ref-title').focus();}
