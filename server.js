@@ -343,8 +343,13 @@ app.put('/api/projects/:id', (req, res) => {
 });
 
 app.delete('/api/projects/:id', (req, res) => {
-  db.prepare("UPDATE tasks SET project_id=NULL WHERE project_id=?").run(req.params.id);
-  db.prepare('DELETE FROM projects WHERE id=?').run(req.params.id);
+  const pid = req.params.id;
+  db.prepare("UPDATE tasks SET project_id=NULL WHERE project_id=?").run(pid);
+  db.prepare("UPDATE agent_jobs SET project_id=NULL WHERE project_id=?").run(pid);
+  db.prepare("UPDATE requests SET project_id=NULL WHERE project_id=?").run(pid);
+  db.prepare("UPDATE pipeline_runs SET project_id=NULL WHERE project_id=?").run(pid);
+  db.prepare("DELETE FROM pipeline_stages WHERE project_id=?").run(pid);
+  db.prepare('DELETE FROM projects WHERE id=?').run(pid);
   res.json({ ok: true }); broadcast('update');
 });
 
