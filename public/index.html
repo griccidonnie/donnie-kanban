@@ -1631,20 +1631,22 @@ function onProjWsChange(){
   sel.innerHTML = '<option value="">Sin area</option>' + areas.map(a => `<option value="${escAttr(a.id)}">${esc(a.icon||'📂')} ${esc(a.name)}</option>`).join('');
 }
 async function saveProjPanel(projId){
-  const name=document.getElementById('proj-edit-name').value.trim();
-  const color=document.getElementById('proj-edit-color').value;
-  const ws=document.getElementById('proj-edit-ws').value;
-  const area=document.getElementById('proj-edit-area').value;
-  const repo_url=document.getElementById('proj-edit-repo-url').value.trim();
-  const stack=document.getElementById('proj-edit-stack').value;
-  const local_port=parseInt(document.getElementById('proj-edit-local-port').value)||0;
-  const compose_file=document.getElementById('proj-edit-compose-file').value.trim();
-  const staging_url=document.getElementById('proj-edit-staging-url').value.trim();
-  const prod_url=document.getElementById('proj-edit-prod-url').value.trim();
-  if(!name) return;
-  await api.put('/api/projects/'+projId,{name,color,workspace_id:ws,area_id:area,repo_url,stack,local_port,compose_file,staging_url,prod_url});
-  closeSlidePanel();
-  await loadData();
+  try{
+    const name=document.getElementById('proj-edit-name').value.trim();
+    const color=document.getElementById('proj-edit-color').value;
+    const ws=document.getElementById('proj-edit-ws').value;
+    const area=document.getElementById('proj-edit-area').value;
+    const repo_url=(document.getElementById('proj-edit-repo-url')||{}).value||'';
+    const stack=(document.getElementById('proj-edit-stack')||{}).value||'';
+    const local_port=parseInt((document.getElementById('proj-edit-local-port')||{}).value)||0;
+    const compose_file=(document.getElementById('proj-edit-compose-file')||{}).value||'';
+    const staging_url=(document.getElementById('proj-edit-staging-url')||{}).value||'';
+    const prod_url=(document.getElementById('proj-edit-prod-url')||{}).value||'';
+    if(!name) return;
+    await api.put('/api/projects/'+projId,{name,color,workspace_id:ws,area_id:area,repo_url,stack,local_port,compose_file,staging_url,prod_url});
+    closeSlidePanel();
+    await loadData();
+  }catch(e){alert('Error al guardar: '+e.message);console.error(e);}
 }
 async function deleteProjFromPanel(projId){
   const p=data.projects.find(x=>x.id===projId);

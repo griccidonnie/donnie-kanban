@@ -20,7 +20,7 @@ app.use((req, res, next) => {
     "style-src 'unsafe-inline' 'self' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com; " +
     "img-src 'self' data:; " +
-    "connect-src 'self' ws: wss:; " +
+    "connect-src 'self' ws: wss: http://*.ts.net:* https://*.ts.net:*; " +
     "frame-src 'self' http: https:; " +
     "frame-ancestors 'none'"
   );
@@ -51,7 +51,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     icon TEXT DEFAULT '📂',
-    workspace_id TEXT DEFAULT '' REFERENCES workspaces(id) ON DELETE SET DEFAULT,
+    workspace_id TEXT DEFAULT NULL REFERENCES workspaces(id) ON DELETE SET DEFAULT,
     sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
@@ -61,7 +61,7 @@ db.exec(`
     name TEXT NOT NULL,
     color TEXT DEFAULT '#58a6ff',
     notes TEXT DEFAULT '',
-    workspace_id TEXT DEFAULT '' REFERENCES workspaces(id) ON DELETE SET DEFAULT,
+    workspace_id TEXT DEFAULT NULL REFERENCES workspaces(id) ON DELETE SET DEFAULT,
     area_id TEXT DEFAULT '',
     sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
@@ -91,7 +91,7 @@ db.exec(`
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
     column_id TEXT DEFAULT 'todo',
-    project_id TEXT DEFAULT '' REFERENCES projects(id) ON DELETE SET DEFAULT,
+    project_id TEXT DEFAULT NULL REFERENCES projects(id) ON DELETE SET DEFAULT,
     urgent INTEGER DEFAULT 0,
     important INTEGER DEFAULT 1,
     due TEXT,
@@ -119,7 +119,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS pipeline_stages (
     id TEXT PRIMARY KEY,
-    project_id TEXT DEFAULT '' REFERENCES projects(id) ON DELETE CASCADE,
+    project_id TEXT DEFAULT NULL REFERENCES projects(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT DEFAULT 'manual',
     sort_order INTEGER DEFAULT 0,
@@ -129,7 +129,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS pipeline_runs (
     id TEXT PRIMARY KEY,
     request_id TEXT DEFAULT '',
-    project_id TEXT DEFAULT '' REFERENCES projects(id) ON DELETE SET DEFAULT,
+    project_id TEXT DEFAULT NULL REFERENCES projects(id) ON DELETE SET DEFAULT,
     current_stage TEXT DEFAULT '',
     status TEXT DEFAULT 'running',
     history TEXT DEFAULT '[]',
@@ -139,7 +139,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS requests (
     id TEXT PRIMARY KEY,
-    project_id TEXT DEFAULT '' REFERENCES projects(id) ON DELETE SET DEFAULT,
+    project_id TEXT DEFAULT NULL REFERENCES projects(id) ON DELETE SET DEFAULT,
     description TEXT NOT NULL,
     submitted_by TEXT DEFAULT '',
     status TEXT DEFAULT 'pending',
@@ -150,7 +150,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS agent_jobs (
     id TEXT PRIMARY KEY,
-    project_id TEXT DEFAULT '' REFERENCES projects(id) ON DELETE SET DEFAULT,
+    project_id TEXT DEFAULT NULL REFERENCES projects(id) ON DELETE SET DEFAULT,
     instruction TEXT NOT NULL,
     status TEXT DEFAULT 'queued',
     branch TEXT DEFAULT '',
@@ -172,6 +172,15 @@ try { db.exec("ALTER TABLE projects ADD COLUMN local_port INTEGER DEFAULT 0"); }
 try { db.exec("ALTER TABLE projects ADD COLUMN compose_file TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE projects ADD COLUMN staging_url TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE projects ADD COLUMN prod_url TEXT DEFAULT ''"); } catch(e) {}
+
+// Data migration: coerce empty-string FK columns to NULL (fixes FK constraint violations)
+db.prepare("UPDATE areas SET workspace_id=NULL WHERE workspace_id=''").run();
+db.prepare("UPDATE projects SET workspace_id=NULL WHERE workspace_id=''").run();
+db.prepare("UPDATE tasks SET project_id=NULL WHERE project_id=''").run();
+db.prepare("UPDATE pipeline_stages SET project_id=NULL WHERE project_id=''").run();
+db.prepare("UPDATE pipeline_runs SET project_id=NULL WHERE project_id=''").run();
+db.prepare("UPDATE requests SET project_id=NULL WHERE project_id=''").run();
+db.prepare("UPDATE agent_jobs SET project_id=NULL WHERE project_id=''").run();
 
 // Seed columns if empty
 const colCount = db.prepare('SELECT COUNT(*) as c FROM columns').get().c;
@@ -200,7 +209,7 @@ if (projCount === 0) {
   db.pragma('foreign_keys = OFF');
   const ins = db.prepare('INSERT INTO projects (id, name, color, workspace_id, sort_order) VALUES (?, ?, ?, ?, ?)');
   const wsExists = db.prepare("SELECT 1 FROM workspaces WHERE id='k2'").get();
-  const wsId = wsExists ? 'k2' : '';
+  const wsId = wsExists ? 'k2' : null;
   ins.run('soc2', 'SOC 2', '#f85149', wsId, 0);
   ins.run('ai-adoption', 'Adopción IA', '#58a6ff', wsId, 1);
   ins.run('infra', 'Infraestructura', '#3fb950', wsId, 2);
@@ -271,8 +280,8 @@ app.put('/api/workspaces/:id', (req, res) => {
 });
 
 app.delete('/api/workspaces/:id', (req, res) => {
-  db.prepare("UPDATE areas SET workspace_id='' WHERE workspace_id=?").run(req.params.id);
-  db.prepare("UPDATE projects SET workspace_id='' WHERE workspace_id=?").run(req.params.id);
+  db.prepare("UPDATE areas SET workspace_id=NULL WHERE workspace_id=?").run(req.params.id);
+  db.prepare("UPDATE projects SET workspace_id=NULL WHERE workspace_id=?").run(req.params.id);
   db.prepare('DELETE FROM workspaces WHERE id=?').run(req.params.id);
   res.json({ ok: true }); broadcast('update');
 });
@@ -281,7 +290,7 @@ app.delete('/api/workspaces/:id', (req, res) => {
 app.post('/api/areas', (req, res) => {
   const { id, name, icon, workspace_id } = req.body;
   const sort = db.prepare('SELECT COALESCE(MAX(sort_order),0)+1 as n FROM areas').get().n;
-  db.prepare('INSERT INTO areas (id, name, icon, workspace_id, sort_order) VALUES (?,?,?,?,?)').run(id, name, icon || '📂', workspace_id || '', sort);
+  db.prepare('INSERT INTO areas (id, name, icon, workspace_id, sort_order) VALUES (?,?,?,?,?)').run(id, name, icon || '📂', workspace_id || null, sort);
   res.json({ ok: true }); broadcast('update');
 });
 
@@ -290,7 +299,7 @@ app.put('/api/areas/:id', (req, res) => {
   const sets = [], vals = [];
   if (name !== undefined) { sets.push('name=?'); vals.push(name); }
   if (icon !== undefined) { sets.push('icon=?'); vals.push(icon); }
-  if (workspace_id !== undefined) { sets.push('workspace_id=?'); vals.push(workspace_id); }
+  if (workspace_id !== undefined) { sets.push('workspace_id=?'); vals.push(workspace_id || null); }
   if (sort_order !== undefined) { sets.push('sort_order=?'); vals.push(sort_order); }
   if (sets.length) { vals.push(req.params.id); db.prepare(`UPDATE areas SET ${sets.join(',')} WHERE id=?`).run(...vals); }
   res.json({ ok: true }); broadcast('update');
@@ -317,7 +326,7 @@ app.put('/api/projects/:id', (req, res) => {
   if (color !== undefined) { sets.push('color=?'); vals.push(color); }
   if (notes !== undefined) { sets.push('notes=?'); vals.push(notes); }
   if (sort_order !== undefined) { sets.push('sort_order=?'); vals.push(sort_order); }
-  if (workspace_id !== undefined) { sets.push('workspace_id=?'); vals.push(workspace_id); }
+  if (workspace_id !== undefined) { sets.push('workspace_id=?'); vals.push(workspace_id || null); }
   if (area_id !== undefined) { sets.push('area_id=?'); vals.push(area_id); }
   if (priority !== undefined) { sets.push('priority=?'); vals.push(priority); }
   if (repo_url !== undefined) { sets.push('repo_url=?'); vals.push(repo_url); }
@@ -334,7 +343,7 @@ app.put('/api/projects/:id', (req, res) => {
 });
 
 app.delete('/api/projects/:id', (req, res) => {
-  db.prepare("UPDATE tasks SET project_id='' WHERE project_id=?").run(req.params.id);
+  db.prepare("UPDATE tasks SET project_id=NULL WHERE project_id=?").run(req.params.id);
   db.prepare('DELETE FROM projects WHERE id=?').run(req.params.id);
   res.json({ ok: true }); broadcast('update');
 });
@@ -374,7 +383,7 @@ app.post('/api/tasks', (req, res) => {
   const { id, title, description, column_id, project_id, urgent, important, due, tags } = req.body;
   const sort = db.prepare('SELECT COALESCE(MAX(sort_order),0)+1 as n FROM tasks').get().n;
   db.prepare('INSERT INTO tasks (id, title, description, column_id, project_id, urgent, important, due, tags, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(id, title, description || '', column_id || 'todo', project_id || '', urgent ? 1 : 0, important ? 1 : 0, due || null, JSON.stringify(tags || []), sort);
+    .run(id, title, description || '', column_id || 'todo', project_id || null, urgent ? 1 : 0, important ? 1 : 0, due || null, JSON.stringify(tags || []), sort);
   res.json({ ok: true }); broadcast('update');
 });
 
@@ -384,7 +393,9 @@ app.put('/api/tasks/:id', (req, res) => {
   fields.forEach(f => {
     if (req.body[f] !== undefined) {
       sets.push(f + '=?');
-      vals.push(['urgent', 'important', 'risk_flag'].includes(f) ? (req.body[f] ? 1 : 0) : req.body[f]);
+      let v = ['urgent', 'important', 'risk_flag'].includes(f) ? (req.body[f] ? 1 : 0) : req.body[f];
+      if (f === 'project_id') v = v || null;
+      vals.push(v);
     }
   });
   if (req.body.tags !== undefined) { sets.push('tags=?'); vals.push(JSON.stringify(req.body.tags)); }
@@ -623,7 +634,7 @@ app.post('/api/requests', (req, res) => {
   const { project_id, description, submitted_by } = req.body;
   if (!description) return res.status(400).json({ error: 'description required' });
   const id = 'req-' + Date.now();
-  db.prepare('INSERT INTO requests (id, project_id, description, submitted_by) VALUES (?,?,?,?)').run(id, project_id || '', description, submitted_by || 'anonymous');
+  db.prepare('INSERT INTO requests (id, project_id, description, submitted_by) VALUES (?,?,?,?)').run(id, project_id || null, description, submitted_by || 'anonymous');
   broadcast('update');
   res.json({ ok: true, id });
 });
