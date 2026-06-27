@@ -804,11 +804,35 @@ async function runAgentJob(jobId, project, instruction, branch) {
 
   db.prepare("UPDATE agent_jobs SET status='done', pr_url=?, completed_at=datetime('now') WHERE id=?").run(prUrl, jobId);
 
+  // Auto-detect stack if not set
+  const currentProj = db.prepare('SELECT stack, local_port FROM projects WHERE id=?').get(project.id);
+  if (currentProj && !currentProj.stack) {
+    const detected = detectStack(projPath);
+    if (detected) {
+      const portDefaults = { node: 3000, python: 8000, go: 8080, static: 8080 };
+      const updates = { stack: detected };
+      if (!currentProj.local_port) updates.local_port = portDefaults[detected] || 3000;
+      const sets = Object.entries(updates).map(([k]) => k + '=?');
+      const vals = Object.values(updates);
+      vals.push(project.id);
+      db.prepare(`UPDATE projects SET ${sets.join(',')} WHERE id=?`).run(...vals);
+    }
+  }
+
   // Return to main branch
   await spawnAsync('git', ['checkout', 'main'], { cwd: projPath }).catch(() =>
     spawnAsync('git', ['checkout', 'master'], { cwd: projPath })
   );
   broadcast('update');
+}
+
+function detectStack(dir) {
+  if (fs.existsSync(path.join(dir, 'package.json'))) return 'node';
+  if (fs.existsSync(path.join(dir, 'requirements.txt')) || fs.existsSync(path.join(dir, 'pyproject.toml'))) return 'python';
+  if (fs.existsSync(path.join(dir, 'go.mod'))) return 'go';
+  if (fs.existsSync(path.join(dir, 'index.html')) && !fs.existsSync(path.join(dir, 'package.json'))) return 'static';
+  if (fs.existsSync(path.join(dir, 'Dockerfile'))) return 'docker';
+  return '';
 }
 
 function spawnAsync(cmd, args, opts) {

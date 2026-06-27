@@ -1609,14 +1609,13 @@ function openProjectPanel(projId){
     <div class="form-group"><label>Color</label><input type="color" id="proj-edit-color" value="${escAttr(p.color)}" style="width:48px;height:32px;border:1px solid var(--border);cursor:pointer;background:none;border-radius:var(--radius-sm);"></div>
     <div class="form-group"><label>Workspace</label><select id="proj-edit-ws" onchange="onProjWsChange()"><option value="">Sin asignar</option>${wsOptions}</select></div>
     <div class="form-group"><label>Area</label><select id="proj-edit-area"><option value="">Sin area</option>${areaOptions}</select></div>
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div class="form-group" style="grid-column:1/-1;margin-bottom:0;"><label>Stack</label><select id="proj-edit-stack"><option value="">Sin definir</option>${['node','python','go','static','docker'].map(s=>'<option value="'+s+'"'+(p.stack===s?' selected':'')+'>'+({node:'Node.js',python:'Python',go:'Go',static:'Static',docker:'Docker'}[s])+'</option>').join('')}</select></div>
-      <div class="form-group" style="grid-column:1/-1;margin-bottom:0;"><label>Repo URL</label><input type="url" id="proj-edit-repo-url" value="${escAttr(p.repo_url||'')}" placeholder="https://github.com/..."></div>
-      <div class="form-group" style="margin-bottom:0;"><label>Puerto local</label><input type="number" id="proj-edit-local-port" value="${p.local_port||''}" min="0" max="65535" placeholder="3000"></div>
-      <div class="form-group" style="margin-bottom:0;"><label>Compose file</label><input type="text" id="proj-edit-compose-file" value="${escAttr(p.compose_file||'')}" placeholder="docker-compose.yml"></div>
-      <div class="form-group" style="margin-bottom:0;"><label>Staging URL</label><input type="url" id="proj-edit-staging-url" value="${escAttr(p.staging_url||'')}" placeholder="https://staging..."></div>
-      <div class="form-group" style="margin-bottom:0;"><label>Prod URL</label><input type="url" id="proj-edit-prod-url" value="${escAttr(p.prod_url||'')}" placeholder="https://..."></div>
-    </div>
+    ${(p.stack||p.repo_url||p.local_port||p.staging_url||p.prod_url)?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:var(--fs-sm);color:var(--text-muted);">
+      ${p.stack?`<div>Stack: <strong>${esc({node:'Node.js',python:'Python',go:'Go',static:'Static',docker:'Docker'}[p.stack]||p.stack)}</strong> (auto-detectado)</div>`:''}
+      ${p.repo_url?`<div>Repo: ${esc(p.repo_url)}</div>`:''}
+      ${p.local_port?`<div>Puerto: ${p.local_port}</div>`:''}
+      ${p.staging_url?`<div>Staging: ${esc(p.staging_url)}</div>`:''}
+      ${p.prod_url?`<div>Prod: ${esc(p.prod_url)}</div>`:''}
+    </div>`:''}
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
       <button class="btn btn-sm" onclick="openProjectConfig('${escAttr(projId)}',null);closeSlidePanel()">Ver detalle completo</button>
       <button class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="deleteProjFromPanel('${escAttr(projId)}')">Eliminar</button>
@@ -1636,14 +1635,8 @@ async function saveProjPanel(projId){
     const color=document.getElementById('proj-edit-color').value;
     const ws=document.getElementById('proj-edit-ws').value;
     const area=document.getElementById('proj-edit-area').value;
-    const repo_url=(document.getElementById('proj-edit-repo-url')||{}).value||'';
-    const stack=(document.getElementById('proj-edit-stack')||{}).value||'';
-    const local_port=parseInt((document.getElementById('proj-edit-local-port')||{}).value)||0;
-    const compose_file=(document.getElementById('proj-edit-compose-file')||{}).value||'';
-    const staging_url=(document.getElementById('proj-edit-staging-url')||{}).value||'';
-    const prod_url=(document.getElementById('proj-edit-prod-url')||{}).value||'';
     if(!name) return;
-    await api.put('/api/projects/'+projId,{name,color,workspace_id:ws,area_id:area,repo_url,stack,local_port,compose_file,staging_url,prod_url});
+    await api.put('/api/projects/'+projId,{name,color,workspace_id:ws,area_id:area});
     closeSlidePanel();
     await loadData();
   }catch(e){alert('Error al guardar: '+e.message);console.error(e);}
